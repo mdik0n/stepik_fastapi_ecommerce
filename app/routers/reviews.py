@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status, HTTPException
 from app.db_depends import get_async_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func,exists
+from sqlalchemy import select, func, exists
 from app.models.reviews import Review as ReviewModel
 from app.models.users import User as UserModel
 from app.models.products import Product as ProductModel
@@ -46,25 +46,25 @@ async def create_review(review_data: ReviewCreate,
          создание отзыва
     '''
 
-    '''Проверка что пользователь может оставлять один отзыв на один товар'''
+    '''Проверка что пользователь может оставлять один отзыв на один конкретный товар'''
     review_exist = await db.scalar(
         select(
-            exists().where(ReviewModel.user_id==current_user.id)
+            exists().where(ReviewModel.user_id == current_user.id, ReviewModel.product_id == review_data.product_id)
         )
     )
-
     if review_exist:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT,detail="You can only add one review")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You can only add one review")
 
     if current_user.role != "buyer":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only buyer can create review")
 
-    product_result = await  db.scalars(
-        select(ProductModel).where(ProductModel.id == review_data.product_id, ProductModel.is_active))
+    product_exists = await db.scalar(
+        select(
+            exists().where(ProductModel.id == review_data.product_id, ProductModel.is_active == True)
+        )
+    )
 
-    product = product_result.first()
-
-    if not product:
+    if not product_exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
 
     db_order = ReviewModel(comment=review_data.comment,
