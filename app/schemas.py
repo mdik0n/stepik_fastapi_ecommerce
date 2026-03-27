@@ -48,7 +48,7 @@ class Product(BaseModel):
     """
     id: int = Field(..., description="Уникальный идентификатор товара")
     name: str = Field(..., description="Название товара")
-    rating : float = Field(...,description="Средняя оценка товара")
+    rating: float = Field(..., description="Средняя оценка товара")
     description: str | None = Field(None, description="Описание товара")
     price: Decimal = Field(..., description="Цена товара в рублях", gt=0, decimal_places=2)
     image_url: str | None = Field(None, description="URL изображения товара")
@@ -78,21 +78,28 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
-
 class ReviewCreate(BaseModel):
-    product_id : int = Field(...,description="ID продукта")
-    comment : str = Field(...,description="Текст отзыва")
-    grade : float = Field(...,ge=1,le=5,description="Оценка продукта")
+    """
+        Модель для создания отзыва.
+        Используется в POST-запросах.
+
+    """
+
+    product_id: int = Field(..., description="ID продукта")
+    comment: str = Field(..., description="Текст отзыва")
+    grade: float = Field(..., ge=1, le=5, description="Оценка продукта")
 
 
 class Review(BaseModel):
-    id : int
-    user_id : int
-    product_id : int
-    comment : str
-    comment_date : datetime
-    grade : float
-    is_active : bool
+    """
+    Модель для ответа с данными отзыва.
+    Используется в GET-запросах.
+    """
 
-
-
+    id: int
+    user_id: int
+    product_id: int
+    comment: str
+    comment_date: datetime
+    grade: float
+    is_active: bool

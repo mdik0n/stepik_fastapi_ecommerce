@@ -14,6 +14,9 @@ router = APIRouter(prefix="/reviews", tags=["reviews"])
 
 
 async def update_product_rating(db: AsyncSession, product_id: int):
+    '''
+         Расчет рейтинга товара
+    '''
     result = await db.execute(
         select(func.avg(ReviewModel.grade)).where(
             ReviewModel.product_id == product_id,
@@ -46,7 +49,7 @@ async def create_review(review_data: ReviewCreate,
          создание отзыва
     '''
 
-    '''Проверка что пользователь может оставлять один отзыв на один конкретный товар'''
+    # Проверка что пользователь может оставлять один отзыв на  конкретный товар
     review_exist = await db.scalar(
         select(
             exists().where(ReviewModel.user_id == current_user.id, ReviewModel.product_id == review_data.product_id)
@@ -55,9 +58,12 @@ async def create_review(review_data: ReviewCreate,
     if review_exist:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You can only add one review")
 
+    # Проверка что отзыв может создавать юзер с ролью buyer
+
     if current_user.role != "buyer":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only buyer can create review")
 
+    # Проверка на существование продукта
     product_exists = await db.scalar(
         select(
             exists().where(ProductModel.id == review_data.product_id, ProductModel.is_active == True)
@@ -97,12 +103,11 @@ async def delete_review(review_id: int,
     if not review:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
 
+    # Проверка что отзыв может удалять юзер с ролью buyer или admin
     if review.user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete your own reviews")
 
     review.is_active = False
-    print("=========================")
-    print(review.product)
 
     await db.commit()
     await db.refresh(review)
