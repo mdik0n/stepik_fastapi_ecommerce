@@ -1,6 +1,6 @@
 from decimal import Decimal
-from sqlalchemy import String, Boolean, Integer, Numeric, ForeignKey, text, DateTime
-from sqlalchemy.ext.baked import bakery
+from sqlalchemy import String, Boolean, Integer, Numeric, ForeignKey, text, DateTime,Computed,Index
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 
@@ -23,9 +23,27 @@ class Product(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
                                                  onupdate=func.now(), nullable=False)
 
+    tsv: Mapped[TSVECTOR] = mapped_column(
+        TSVECTOR,
+        Computed(
+            """
+            setweight(to_tsvector('english', coalesce(name, '')), 'A')
+            || 
+            setweight(to_tsvector('english', coalesce(description, '')), 'B')
+            """,
+            persisted=True,
+        ),
+        nullable=False,
+    )
+
+
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
     seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
     category: Mapped["Category"] = relationship("Category", back_populates="products", lazy="selectin")
     seller: Mapped["User"] = relationship("User", back_populates="products", lazy="selectin")
     reviews: Mapped[list["Review"]] = relationship("Review", back_populates="product", lazy="selectin")
+
+    __table_args__ = (
+        Index("ix_products_tsv_gin", "tsv", postgresql_using="gin"),
+    )
