@@ -35,6 +35,9 @@ async def get_all_products(
             None, description="true — только товары в наличии, false — только без остатка"),
         seller_id: int | None = Query(
             None, description="ID продавца для фильтрации"),
+        time_created: bool | None = Query(
+            None, description="Сортировка по дате создания товара"
+        ),
         db: AsyncSession = Depends(get_async_db)
 ):
     """
@@ -73,6 +76,8 @@ async def get_all_products(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
+    if time_created:
+        products_stmt = products_stmt.order_by(time_created)
 
     items = (await db.scalars(products_stmt)).all()
 
