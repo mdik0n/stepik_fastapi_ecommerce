@@ -55,6 +55,8 @@ class Product(BaseModel):
     stock: int = Field(..., description="Количество товара на складе")
     category_id: int = Field(..., description="ID категории")
     is_active: bool = Field(..., description="Активность товара")
+    created_at : datetime = Field(...,description="Дата создания товара")
+    updated_at : datetime = Field(...,description="Дата создания товара")
 
     model_config = ConfigDict(from_attributes=True)
 
