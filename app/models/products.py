@@ -1,8 +1,10 @@
 from decimal import Decimal
-from sqlalchemy import String, Boolean, Integer, Numeric, ForeignKey, text
+from sqlalchemy import String, Boolean, Integer, Numeric, ForeignKey, text, DateTime
 from sqlalchemy.ext.baked import bakery
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from datetime import datetime
 
+from sqlalchemy import func
 from app.database import Base
 
 
@@ -17,6 +19,9 @@ class Product(Base):
     stock: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     rating: Mapped[float] = mapped_column(default=0.0, server_default=text('0'))  # Средний рейтинг
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
+                                                 onupdate=func.now(), nullable=False)
 
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
     seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
