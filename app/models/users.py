@@ -12,5 +12,6 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     role: Mapped[str] = mapped_column(String, nullable=False, default="buyer")  # "buyer" or "seller"
 
-    products: Mapped[list["Product"]] = relationship("Product", back_populates="seller",lazy="selectin")
-    reviews: Mapped[list["Review"]] = relationship("Review", back_populates="user",lazy="selectin")
+    products: Mapped[list["Product"]] = relationship("Product", back_populates="seller", lazy="selectin")
+    reviews: Mapped[list["Review"]] = relationship("Review", back_populates="user", lazy="selectin")
+    cart_items: Mapped[list["CartItem"]] = relationship("CartItem", back_populates="user", cascade="all, delete-orphan")

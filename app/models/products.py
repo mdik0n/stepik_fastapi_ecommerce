@@ -1,11 +1,12 @@
 from decimal import Decimal
-from sqlalchemy import String, Boolean, Integer, Numeric, ForeignKey, text, DateTime,Computed,Index
+from sqlalchemy import String, Boolean, Integer, Numeric, ForeignKey, text, DateTime, Computed, Index
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 
 from sqlalchemy import func
 from app.database import Base
+from app.models.cart_items import CartItem
 
 
 class Product(Base):
@@ -36,7 +37,6 @@ class Product(Base):
         nullable=False,
     )
 
-
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
     seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
@@ -47,3 +47,5 @@ class Product(Base):
     __table_args__ = (
         Index("ix_products_tsv_gin", "tsv", postgresql_using="gin"),
     )
+
+    cart_items: Mapped[list["CartItem"]] = relationship("CartItem", back_populates="product", cascade="all, delete-orphan")

@@ -78,9 +78,14 @@ async def get_all_products(
         )
         result = await db.execute(products_stmt)
         rows = result.all()
-        items = [row[0] for row in rows]  # сами объекты
-        # при желании можно вернуть ранг в ответе
-        # ranks = [row.rank for row in rows]
+        items = []
+        for row in rows:
+            product = row[0]  # ProductModel объект
+            rank = row[1]  # float число
+
+            product_dict = ProductSchema.model_validate(product).model_dump()
+            product_dict["rank"] = rank
+            items.append(product_dict)
     else:
         products_stmt = (
             select(ProductModel)

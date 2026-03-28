@@ -14,7 +14,6 @@ app.include_router(products.router)
 app.include_router(users.router)
 app.include_router(reviews.router)
 
-
 # Корневой эндпоинт для проверки
 @app.get("/")
 async def root():
