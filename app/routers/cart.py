@@ -48,6 +48,7 @@ async def _get_cart_item(user_id: int, product_id: int, db: AsyncSession) -> Car
 async def get_cart(
         db: AsyncSession = Depends(get_async_db),
         current_user: UserModel = Depends(get_current_user)):
+
     items_result = await db.scalars(
         select(CartItemModel)
         .options(selectinload(CartItemModel.product))
