@@ -6,7 +6,6 @@ from datetime import datetime
 
 from sqlalchemy import func
 from app.database import Base
-from app.models.cart_items import CartItem
 
 
 class Product(Base):
@@ -48,4 +47,5 @@ class Product(Base):
         Index("ix_products_tsv_gin", "tsv", postgresql_using="gin"),
     )
 
-    cart_items: Mapped[list["CartItem"]] = relationship("CartItem", back_populates="product", cascade="all, delete-orphan")
+    cart_items : Mapped[list["CartItem"]] = relationship("CartItem", back_populates="product",
+                                                         cascade="all,delete-orphan")
