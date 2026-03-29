@@ -15,4 +15,5 @@ class User(Base):
     products: Mapped[list["Product"]] = relationship("Product", back_populates="seller", lazy="selectin")
     reviews: Mapped[list["Review"]] = relationship("Review", back_populates="user", lazy="selectin")
 
-    cart_items : Mapped[list["CartItem"]] = relationship("CartItem",back_populates="user",cascade="all,delete-orphan")
+    cart_items: Mapped[list["CartItem"]] = relationship("CartItem", back_populates="user", cascade="all,delete-orphan")
+    orders: Mapped[list["Order"]] = relationship("Order", back_populates="user", cascade="all, delete-orphan")
