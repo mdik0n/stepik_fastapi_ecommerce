@@ -48,7 +48,6 @@ async def _get_cart_item(user_id: int, product_id: int, db: AsyncSession) -> Car
 async def get_cart(
         db: AsyncSession = Depends(get_async_db),
         current_user: UserModel = Depends(get_current_user)):
-
     items_result = await db.scalars(
         select(CartItemModel)
         .options(selectinload(CartItemModel.product))
@@ -97,9 +96,9 @@ async def add_item_to_cart(
         db.add(cart_item)
 
     await db.commit()
-    updated_cart_item = await _get_cart_item(current_user.id,payload.product_id,db)
+    updated_cart_item = await _get_cart_item(current_user.id, payload.product_id, db)
 
-    return cart_item
+    return updated_cart_item
 
 
 @router.put("/{product_id}", response_model=CartItemSchema)
