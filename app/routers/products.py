@@ -4,9 +4,7 @@ from app.models.products import Product as ProductModel
 from app.models.categories import Category as CategoryModel
 from app.models.users import User as UserModel
 from app.schemas import Product as ProductSchema, ProductCreate, ProductList
-from app.db_depends import get_db
 from app.db_depends import get_async_db
-from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, exists, func, and_, desc
 from app.auth import get_current_seller
@@ -14,11 +12,56 @@ from app.auth import get_current_seller
 from app.models.reviews import Review as ReviewModel
 from app.schemas import Review as ReviewSchema
 
+from pathlib import Path
+import uuid
+from fastapi import UploadFile, File, Form, HTTPException, status
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+MEDIA_ROOT = BASE_DIR / "media" / "products"
+MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_IMAGE_SIZE = 2 * 1024 * 1024  # 2 097 152 байт
+
 # Создаём маршрутизатор для товаров
 router = APIRouter(
     prefix="/products",
     tags=["products"],
 )
+
+
+async def save_product_image(file: UploadFile) -> str:
+    """
+    Сохраняет изображение товара и возвращает относительный URL.
+    """
+
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only JPG, PNG or WebP images are allowed")
+
+    content = await file.read()
+
+    if len(content) > MAX_IMAGE_SIZE:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Image is too large")
+
+    extension = Path(file.filename or "").suffix.lower() or "jpg"
+    file_name = f"{uuid.uuid4()}{extension}"
+    file_path = MEDIA_ROOT / file_name
+    file_path.write_bytes(content)
+
+    return f"/media/products{file_name}"
+
+
+def remove_product_image(url: str | None) -> None:
+    """
+    Удаляет файл изображения, если он существует.
+    """
+
+    if not url:
+        return
+
+    relative_path = url.strip("/")
+    file_path = BASE_DIR / relative_path
+    if file_path.exists():
+        file_path.unlink()
 
 
 @router.get("/", response_model=ProductList)
@@ -105,32 +148,37 @@ async def get_all_products(
 
 
 @router.post("/", response_model=ProductSchema, status_code=status.HTTP_201_CREATED)
-async def create_product(product: ProductCreate,
-                         db: AsyncSession = Depends(get_async_db),
-                         current_user: UserModel = Depends(get_current_seller)
-                         ):
+async def create_product(
+        product: ProductCreate = Depends(ProductCreate.as_form),
+        image: UploadFile | None = File(None),
+        db: AsyncSession = Depends(get_async_db),
+        current_user: UserModel = Depends(get_current_seller)
+):
     """
     Создаёт новый товар, привязанный к текущему продавцу (только для 'seller').
     """
 
-    category_exists = await db.scalar(
-        select(
-            exists().where(
-                CategoryModel.id == product.category_id,
-                CategoryModel.is_active == True,
-            )
-        )
+    category_result = await db.scalars(
+        select(CategoryModel).where(CategoryModel.id == product.category_id,
+                                    CategoryModel.is_active == True)
     )
+    if not category_result.first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Category not found or inactive")
 
-    if not category_exists:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category not found or inactive")
+    # Сохранение изображения (если есть)
+    image_url = await save_product_image(image) if image else None
 
-    # Создаём товар
-    db_product = ProductModel(**product.model_dump(), seller_id=current_user.id)
+    # Создание товара
+    db_product = ProductModel(
+        **product.model_dump(),
+        seller_id=current_user.id,
+        image_url=image_url,
+    )
 
     db.add(db_product)
     await db.commit()
-    await db.refresh(db_product)  # Для получения id и is_active из базы
+    await db.refresh(db_product)
     return db_product
 
 
@@ -180,73 +228,73 @@ async def get_product(product_id: int, db: AsyncSession = Depends(get_async_db))
     return product
 
 
-@router.put("/{product_id}", response_model=ProductSchema, status_code=status.HTTP_200_OK)
-async def update_product(product_id: int,
-                         product: ProductCreate,
-                         db: AsyncSession = Depends(get_async_db),
-                         current_user: UserModel = Depends(get_current_seller)
-                         ):
+@router.put("/{product_id}", response_model=ProductSchema)
+async def update_product(
+        product_id: int,
+        product: ProductCreate = Depends(ProductCreate.as_form),
+        image: UploadFile | None = File(None),
+        db: AsyncSession = Depends(get_async_db),
+        current_user: UserModel = Depends(get_current_seller)
+):
     """
     Обновляет товар, если он принадлежит текущему продавцу (только для 'seller').
     """
-    # Проверяем, существует ли товар
-
-    product_result = await db.scalars(
-        select(ProductModel).where(ProductModel.id == product_id, ProductModel.is_active == True))
-    db_product = product_result.first()
-
+    result = await db.scalars(select(ProductModel).where(ProductModel.id == product_id))
+    db_product = result.first()
     if not db_product:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found or inactive")
-    if db_product.seller_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    if db_product.seller_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="You only can update your own products"
-                            )
+                            detail="You can only update your own products")
+    category_result = await db.scalars(
+        select(CategoryModel).where(CategoryModel.id == product.category_id,
+                                    CategoryModel.is_active == True)
+    )
+    if not category_result.first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Category not found or inactive")
 
-    # Проверяем, существует ли активная категория
-    category_exists = await db.scalar(
-        select(
-            exists().where(CategoryModel.id == product.category_id, CategoryModel.is_active == True)
-        )
+    await db.execute(
+        update(ProductModel).where(ProductModel.id == product_id).values(**product.model_dump())
     )
 
-    if not category_exists:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category not found or inactive")
+    if image:
+        remove_product_image(db_product.image_url)
+        db_product.image_url = await save_product_image(image)
 
-    # Обновляем товар
-
-    await db.execute(update(ProductModel).where(ProductModel.id == product_id).values(**product.model_dump()))
     await db.commit()
-    await db.refresh(db_product)  # Для консистентности данных
-
+    await db.refresh(db_product)
     return db_product
 
 
-@router.delete("/{product_id}", response_model=ProductSchema, status_code=status.HTTP_200_OK)
-async def delete_product(product_id: int,
-                         db: AsyncSession = Depends(get_async_db),
-                         current_user: UserModel = Depends(get_current_seller)
-
-                         ):
+@router.delete("/{product_id}", response_model=ProductSchema)
+async def delete_product(
+        product_id: int,
+        db: AsyncSession = Depends(get_async_db),
+        current_user: UserModel = Depends(get_current_seller)
+):
     """
     Выполняет мягкое удаление товара, если он принадлежит текущему продавцу (только для 'seller').
     """
-    product_stmt = select(ProductModel).where(ProductModel.id == product_id, ProductModel.is_active == True)
-    result = await db.scalars(product_stmt)
-    db_product = result.first()
-
-    if not db_product:
+    result = await db.scalars(
+        select(ProductModel).where(ProductModel.id == product_id, ProductModel.is_active == True)
+    )
+    product = result.first()
+    if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found or inactive")
-    if db_product.seller_id != current_user.id and current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="You only can delete your own products"
-                            )
+    if product.seller_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete your own products")
 
-    # Устанавливаем is_active=False
-    db_product.is_active = False
+    remove_product_image(product.image_url)
+
+    await db.execute(
+        update(ProductModel).where(ProductModel.id == product_id).values(image_url=None,
+                                                                         is_active=False)
+    )
+
     await db.commit()
-    await db.refresh(db_product)  # Для возврата is_active = False
-
-    return db_product
+    await db.refresh(product)
+    return product
 
 
 @router.get("/{product_id}/reviews", response_model=list[ReviewSchema])

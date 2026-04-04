@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from decimal import Decimal
 from datetime import datetime
+from typing import Annotated
+from fastapi import Form
 
 
 class CategoryCreate(BaseModel):
@@ -35,10 +37,26 @@ class ProductCreate(BaseModel):
                       description="Название товара (3-100 символов)")
     description: str | None = Field(None, max_length=500,
                                     description="Описание товара (до 500 символов)")
-    price: Decimal = Field(..., gt=0, description="Цена товара (больше 0)", decimal_places=2)
-    image_url: str | None = Field(None, max_length=200, description="URL изображения товара")
+    price: Decimal = Field(gt=0, description="Цена товара (больше 0)", decimal_places=2)
     stock: int = Field(..., ge=0, description="Количество товара на складе (0 или больше)")
     category_id: int = Field(..., description="ID категории, к которой относится товар")
+
+    @classmethod
+    def as_form(
+            cls,
+            name: Annotated[str, Form(...)],
+            price: Annotated[Decimal, Form(...)],
+            stock: Annotated[int, Form(...)],
+            category_id: Annotated[int, Form(...)],
+            description: Annotated[str | None, Form()] = None,
+    ) -> "ProductCreate":
+        return cls(
+            name=name,
+            description=description,
+            price=price,
+            stock=stock,
+            category_id=category_id,
+        )
 
 
 class Product(BaseModel):
@@ -55,8 +73,6 @@ class Product(BaseModel):
     stock: int = Field(..., description="Количество товара на складе")
     category_id: int = Field(..., description="ID категории")
     is_active: bool = Field(..., description="Активность товара")
-    created_at: datetime = Field(..., description="Дата создания товара")
-    updated_at: datetime = Field(..., description="Дата создания товара")
     rank: float | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -157,24 +173,24 @@ class Cart(BaseModel):
 
 
 class OrderItem(BaseModel):
-    id: int = Field(..., description="ID позиции заказа")
-    product_id: int = Field(..., description="ID товара")
-    quantity: int = Field(..., ge=1, description="Количество")
-    unit_price: Decimal = Field(..., ge=0, description="Цена за единицу на момент покупки")
-    total_price: Decimal = Field(..., ge=0, description="Сумма по позиции")
-    product: Product | None = Field(None, description="Полная информация о товаре")
+    id: int = Field(..., ge=1, description="id of the order item")
+    order_id: int = Field(..., description="id of the order")
+    product_id: int = Field(..., description="id of the product")
+    quantity: int = Field(ge=1, description="Quantity of the product")
+    unit_price: Decimal = Field(ge=0, description="Unit price of the product")
+    total_price: Decimal = Field(ge=0, description="Unit price of the product")
+
+    product: Product | None = Field(default=None, description="Product information")
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class Order(BaseModel):
-    id: int = Field(..., description="ID заказа")
-    user_id: int = Field(..., description="ID пользователя")
-    status: str = Field(..., description="Текущий статус заказа")
-    total_amount: Decimal = Field(..., ge=0, description="Общая стоимость")
-    created_at: datetime = Field(..., description="Когда заказ был создан")
-    updated_at: datetime = Field(..., description="Когда последний раз обновлялся")
-    items: list[OrderItem] = Field(default_factory=list, description="Список позиций")
+    id: int = Field(..., ge=1, description="ID of the order")
+    user_id: int = Field(..., ge=1, description="ID of the user")
+    status: str = Field(..., description="Status of the order")
+    total_amount: Decimal = Field(..., description="Total amount of the order")
+    order_items: list[OrderItem] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
